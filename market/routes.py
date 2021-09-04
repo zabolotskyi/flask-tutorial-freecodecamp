@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from market import app, db
 from market.models import Item, User
-from market.forms import LoginForm, RegisterForm, PurchaseItemForm
+from market.forms import LoginForm, RegisterForm, PurchaseItemForm, SellItemForm
 
 
 @app.route("/")
@@ -15,8 +15,10 @@ def home_page():
 @login_required
 def market_page():
     purchase_form = PurchaseItemForm()
+    sell_form = SellItemForm()
 
     if request.method == "POST":
+        # Purchase item logic
         purchased_item = request.form.get("purchased_item")
         purchased_item_object = Item.query.filter_by(name=purchased_item).first()
         if purchased_item_object:
@@ -32,11 +34,34 @@ def market_page():
                     category="danger",
                 )
 
+        # Sell item logic
+        sold_item = request.form.get("sold_item")
+        sold_item_object = Item.query.filter_by(name=sold_item).first()
+        if sold_item_object:
+            if current_user.can_sell(sold_item_object):
+                sold_item_object.sell(current_user)
+                flash(
+                    f"Congratulations! You sold {sold_item_object.name} for {sold_item_object.price}$.",
+                    category="success",
+                )
+            else:
+                flash(
+                    f"Can't sell {sold_item_object.name}.",
+                    category="danger",
+                )
+
         return redirect(url_for("market_page"))
 
     if request.method == "GET":
         items = Item.query.filter_by(owner=None)
-        return render_template("market.html", items=items, purchase_form=purchase_form)
+        owned_items = Item.query.filter_by(owner=current_user.id)
+        return render_template(
+            "market.html",
+            items=items,
+            owned_items=owned_items,
+            purchase_form=purchase_form,
+            sell_form=sell_form,
+        )
 
 
 @app.route("/register", methods=["GET", "POST"])
